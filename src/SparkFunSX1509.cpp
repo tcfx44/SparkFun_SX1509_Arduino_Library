@@ -58,28 +58,31 @@ uint8_t SX1509::init(void)
 
 	// If the reset pin is connected
 	if (pinReset != 255)
-		reset(1);
+		lastOpStatus = reset(1);
 	else
-		reset(0);
+		lastOpStatus = reset(0);
 
 	// Communication test. We'll read from two registers with different
 	// default values to verify communication.
 	uint16_t testRegisters = 0;
 	testRegisters = readWord(REG_INTERRUPT_MASK_A); // This should return 0xFF00
 
+	lastOpStatus = 0;
+
 	// Then read a byte that should be 0x00
 	if (testRegisters == 0xFF00)
 	{
 		// Set the clock to a default of 2MHz using internal
 		clock(INTERNAL_CLOCK_2MHZ);
+		lastOpStatus = 1;
 
-		return 1;
+		return lastOpStatus;
 	}
 
-	return 0;
+	return lastOpStatus;
 }
 
-void SX1509::reset(bool hardware)
+bool SX1509::reset(bool hardware)
 {
 	// if hardware bool is set
 	if (hardware)
@@ -90,7 +93,7 @@ void SX1509::reset(bool hardware)
 		if (regMisc & (1 << 2))
 		{
 			regMisc &= ~(1 << 2);
-			writeByte(REG_MISC, regMisc);
+			lastOpStatus = writeByte(REG_MISC, regMisc);
 		}
 		// Reset the SX1509, the pin is active low
 		::pinMode(pinReset, OUTPUT);	  // set reset pin as output
@@ -101,12 +104,13 @@ void SX1509::reset(bool hardware)
 	else
 	{
 		// Software reset command sequence:
-		writeByte(REG_RESET, 0x12);
-		writeByte(REG_RESET, 0x34);
+		lastOpStatus = writeByte(REG_RESET, 0x12);
+		lastOpStatus = writeByte(REG_RESET, 0x34);
 	}
+	return lastOpStatus;
 }
 
-void SX1509::pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
+bool SX1509::pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 {
 	// The SX1509 RegDir registers: REG_DIR_B, REG_DIR_A
 	//	0: IO is configured as an output
@@ -118,7 +122,7 @@ void SX1509::pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 		if (initialLevel == LOW)
 		{
 			tempRegData &= ~(1 << pin);
-			writeWord(REG_DATA_B, tempRegData);
+			lastOpStatus = writeWord(REG_DATA_B, tempRegData);
 		}
 		modeBit = 0;
 	}
@@ -133,21 +137,24 @@ void SX1509::pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 	else
 		tempRegDir &= ~(1 << pin);
 
-	writeWord(REG_DIR_B, tempRegDir);
+	lastOpStatus = writeWord(REG_DIR_B, tempRegDir);
 
 	// If INPUT_PULLUP was called, set up the pullup too:
-	if (inOut == INPUT_PULLUP)
-		writePin(pin, HIGH);
+	if (inOut == INPUT_PULLUP) {
+		lastOpStatus = writePin(pin, HIGH);
+	}
 
 	if (inOut == ANALOG_OUTPUT)
 	{
-		ledDriverInit(pin);
+		lastOpStatus = ledDriverInit(pin);
 	}
+	return lastOpStatus;
 }
 
-void SX1509::pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
+bool SX1509::pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 {
-	pinDir(pin, inOut, initialLevel);
+	lastOpStatus = pinDir(pin, inOut, initialLevel);
+	return lastOpStatus;
 }
 
 bool SX1509::writePin(uint8_t pin, uint8_t highLow)
@@ -162,7 +169,8 @@ bool SX1509::writePin(uint8_t pin, uint8_t highLow)
 			tempRegData |= (1 << pin);
 		else
 			tempRegData &= ~(1 << pin);
-		return writeWord(REG_DATA_B, tempRegData);
+		  lastOpStatus = writeWord(REG_DATA_B, tempRegData);
+			return lastOpStatus;
 	}
 	else // Otherwise the pin is an input, pull-up/down
 	{
@@ -173,13 +181,15 @@ bool SX1509::writePin(uint8_t pin, uint8_t highLow)
 		{
 			tempPullUp |= (1 << pin);
 			tempPullDown &= ~(1 << pin);
-			return writeWord(REG_PULL_UP_B, tempPullUp) && writeWord(REG_PULL_DOWN_B, tempPullDown);
+			lastOpStatus = writeWord(REG_PULL_UP_B, tempPullUp) && writeWord(REG_PULL_DOWN_B, tempPullDown);
+			return lastOpStatus;
 		}
 		else // If LOW do pull-down, disable pull-up
 		{
 			tempPullDown |= (1 << pin);
 			tempPullUp &= ~(1 << pin);
-			return writeWord(REG_PULL_UP_B, tempPullUp) && writeWord(REG_PULL_DOWN_B, tempPullDown);
+			lastOpStatus = writeWord(REG_PULL_UP_B, tempPullUp) && writeWord(REG_PULL_DOWN_B, tempPullDown);
+			return lastOpStatus;
 		}
 	}
 }
@@ -193,18 +203,21 @@ uint8_t SX1509::readPin(uint8_t pin)
 {
 	uint16_t tempRegDir = readWord(REG_DIR_B);
 
+	lastOpStatus = 0;
+
 	if (tempRegDir & (1 << pin)) // If the pin is an input
 	{
 		uint16_t tempRegData = readWord(REG_DATA_B);
 		if (tempRegData & (1 << pin))
-			return 1;
+			lastOpStatus = 1;
+			return lastOpStatus;
 	}
 	else
 	{
 		// log_d("Pin %d not INPUT, REG_DIR_B: %d", pin, tempRegDir);
 	}
 
-	return 0;
+	return lastOpStatus;
 }
 
 bool SX1509::readPin(const uint8_t pin, bool *value)
@@ -218,16 +231,19 @@ bool SX1509::readPin(const uint8_t pin, bool *value)
 			if (readWord(REG_DATA_B, &tempRegData))
 			{
 				*value = (tempRegData & (1 << pin)) != 0;
-				return true;
+				lastOpStatus = true;
+				return lastOpStatus;
 			};
 		}
 		else
 		{
 			*value = false;
-			return true;
+			lastOpStatus = true;
+			return lastOpStatus;
 		}
 	}
-	return false;
+	lastOpStatus = false;
+	return lastOpStatus;
 }
 
 uint8_t SX1509::digitalRead(uint8_t pin)
@@ -240,7 +256,7 @@ bool SX1509::digitalRead(uint8_t pin, bool *value)
 	return readPin(pin, value);
 }
 
-void SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false*/)
+bool SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false*/)
 {
 	uint16_t tempWord;
 	uint8_t tempByte;
@@ -249,18 +265,18 @@ void SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false
 	// Writing a 1 to the pin bit will disable that pins input buffer
 	tempWord = readWord(REG_INPUT_DISABLE_B);
 	tempWord |= (1 << pin);
-	writeWord(REG_INPUT_DISABLE_B, tempWord);
+	lastOpStatus = lastOpStatus = writeWord(REG_INPUT_DISABLE_B, tempWord);
 
 	// Disable pull-up
 	// Writing a 0 to the pin bit will disable that pull-up resistor
 	tempWord = readWord(REG_PULL_UP_B);
 	tempWord &= ~(1 << pin);
-	writeWord(REG_PULL_UP_B, tempWord);
+	lastOpStatus = writeWord(REG_PULL_UP_B, tempWord);
 
 	// Set direction to output (REG_DIR_B)
 	tempWord = readWord(REG_DIR_B);
 	tempWord &= ~(1 << pin); // 0=output
-	writeWord(REG_DIR_B, tempWord);
+	lastOpStatus = writeWord(REG_DIR_B, tempWord);
 
 	// Enable oscillator (REG_CLOCK)
 	tempByte = readByte(REG_CLOCK);
@@ -299,25 +315,27 @@ void SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false
 	// Enable LED driver operation (REG_LED_DRIVER_ENABLE)
 	tempWord = readWord(REG_LED_DRIVER_ENABLE_B);
 	tempWord |= (1 << pin);
-	writeWord(REG_LED_DRIVER_ENABLE_B, tempWord);
+	lastOpStatus = writeWord(REG_LED_DRIVER_ENABLE_B, tempWord);
 
 	// Set REG_DATA bit low ~ LED driver started
 	tempWord = readWord(REG_DATA_B);
 	tempWord &= ~(1 << pin);
-	writeWord(REG_DATA_B, tempWord);
+	lastOpStatus = writeWord(REG_DATA_B, tempWord);
+	return lastOpStatus;
 }
 
-void SX1509::pwm(uint8_t pin, uint8_t iOn)
+bool SX1509::pwm(uint8_t pin, uint8_t iOn)
 {
 	// Write the on intensity of pin
 	// Linear mode: Ion = iOn
 	// Log mode: Ion = f(iOn)
-	writeByte(REG_I_ON[pin], iOn);
+	lastOpStatus = writeByte(REG_I_ON[pin], iOn);
+	return lastOpStatus;
 }
 
-void SX1509::analogWrite(uint8_t pin, uint8_t iOn)
+bool SX1509::analogWrite(uint8_t pin, uint8_t iOn)
 {
-	pwm(pin, iOn);
+	return pwm(pin, iOn);
 }
 
 void SX1509::blink(uint8_t pin, unsigned long tOn, unsigned long tOff, uint8_t onIntensity, uint8_t offIntensity)
@@ -397,7 +415,7 @@ void SX1509::keypad(uint8_t rows, uint8_t columns, uint16_t sleepTime, uint8_t s
 		tempWord &= ~(1 << i);
 	for (uint8_t i = 8; i < (columns * 2); i++)
 		tempWord |= (1 << i);
-	writeWord(REG_DIR_B, tempWord);
+	lastOpStatus = writeWord(REG_DIR_B, tempWord);
 
 	// Set regOpenDrain on 0:7:
 	tempByte = readByte(REG_OPEN_DRAIN_A);
@@ -566,7 +584,7 @@ void SX1509::debounceEnable(uint8_t pin)
 {
 	uint16_t debounceEnable = readWord(REG_DEBOUNCE_ENABLE_B);
 	debounceEnable |= (1 << pin);
-	writeWord(REG_DEBOUNCE_ENABLE_B, debounceEnable);
+	lastOpStatus = writeWord(REG_DEBOUNCE_ENABLE_B, debounceEnable);
 }
 
 void SX1509::debouncePin(uint8_t pin)
@@ -591,7 +609,7 @@ void SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 	// Set REG_INTERRUPT_MASK
 	uint16_t tempWord = readWord(REG_INTERRUPT_MASK_B);
 	tempWord &= ~(1 << pin); // 0 = event on IO will trigger interrupt
-	writeWord(REG_INTERRUPT_MASK_B, tempWord);
+	lastOpStatus = writeWord(REG_INTERRUPT_MASK_B, tempWord);
 
 	uint8_t sensitivity = 0;
 	switch (riseFall)
@@ -625,14 +643,14 @@ void SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 	tempWord = readWord(senseRegister);
 	tempWord &= ~(0b11 << pinMask);		  // Mask out the bits we want to write
 	tempWord |= (sensitivity << pinMask); // Add our new bits
-	writeWord(senseRegister, tempWord);
+	lastOpStatus = writeWord(senseRegister, tempWord);
 }
 
 uint16_t SX1509::interruptSource(bool clear /* =true*/)
 {
 	uint16_t intSource = readWord(REG_INTERRUPT_SOURCE_B);
 	if (clear)
-		writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF); // Clear interrupts
+		lastOpStatus = writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF); // Clear interrupts
 	return intSource;
 }
 
@@ -828,7 +846,7 @@ bool SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 	return result && (endResult == I2C_ERROR_OK);
 }
 
-// writeWord(uint8_t registerAddress, uint16_t writeValue)
+// lastOpStatus = writeWord(uint8_t registerAddress, uint16_t writeValue)
 //	This function writes a two-byte word to registerAddress and registerAddress + 1
 //	- the upper byte of writeValue is written to registerAddress
 //		- the lower byte of writeValue is written to registerAddress + 1

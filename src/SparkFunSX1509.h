@@ -79,6 +79,7 @@ private: // These private functions are not available to Arduino sketches.
 	// calculateSlopeRegister - Try to estimate an LED rise/fall duration
 	// register, given the number of milliseconds and LED clock frequency.
 	uint8_t calculateSlopeRegister(unsigned long ms, uint8_t onIntensity, uint8_t offIntensity);
+	bool lastOpStatus;
 
 public:
 	// -----------------------------------------------------------------------------
@@ -116,7 +117,7 @@ public:
 	//  Input:
 	//	 	- hardware: 0 executes a software reset, 1 executes a hardware reset
 	// -----------------------------------------------------------------------------
-	void reset(bool hardware);
+	bool reset(bool hardware);
 
 	// -----------------------------------------------------------------------------
 	// pinMode(uint8_t pin, uint8_t inOut): This function sets one of the SX1509's 16
@@ -127,8 +128,8 @@ public:
 	//	 	- inOut: The Arduino INPUT and OUTPUT constants should be used for the
 	//		 inOut parameter. They do what they say!
 	// -----------------------------------------------------------------------------
-	void pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel = HIGH);
-	void pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel = HIGH); // Legacy - use pinMode
+	bool pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel = HIGH);
+	bool pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel = HIGH); // Legacy - use pinMode
 
 	// -----------------------------------------------------------------------------
 	// digitalWrite(uint8_t pin, uint8_t highLow): This function writes a pin to either high
@@ -170,7 +171,7 @@ public:
 	//			- currently log sets both bank A and B to the same mode
 	//	Note: this function automatically decides to use the internal 2MHz osc.
 	// -----------------------------------------------------------------------------
-	void ledDriverInit(uint8_t pin, uint8_t freq = 1, bool log = false);
+	bool ledDriverInit(uint8_t pin, uint8_t freq = 1, bool log = false);
 
 	// -----------------------------------------------------------------------------
 	// analogWrite(uint8_t pin, uint8_t iOn):	This function can be used to control the intensity
@@ -183,8 +184,8 @@ public:
 	//
 	//	Note: ledDriverInit should be called on the pin before calling this.
 	// -----------------------------------------------------------------------------
-	void analogWrite(uint8_t pin, uint8_t iOn);
-	void pwm(uint8_t pin, uint8_t iOn); // Legacy - use analogWrite
+	bool analogWrite(uint8_t pin, uint8_t iOn);
+	bool pwm(uint8_t pin, uint8_t iOn); // Legacy - use analogWrite
 
 	// -----------------------------------------------------------------------------
 	// setupBlink(uint8_t pin, uint8_t tOn, uint8_t tOff, uint8_t offIntensity, uint8_t tRise, uint8_t
@@ -450,6 +451,8 @@ public:
 	//
 	// -----------------------------------------------------------------------------
 	void clock(uint8_t oscSource = 2, uint8_t oscDivider = 1, uint8_t oscPinFunction = 0, uint8_t oscFreqOut = 0);
+
+	bool isLastOpSuccess() {return lastOpStatus;}
 };
 
 // Add backwards compatibility for the old class name: sx1509Class
