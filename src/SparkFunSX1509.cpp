@@ -203,21 +203,18 @@ uint8_t SX1509::readPin(uint8_t pin)
 {
 	uint16_t tempRegDir = readWord(REG_DIR_B);
 
-	lastOpStatus = 0;
-
 	if (tempRegDir & (1 << pin)) // If the pin is an input
 	{
-		uint16_t tempRegData = readWord(REG_DATA_B);
+		uint16_t tempRegData = readWord(REG_DATA_B); // this will set last_op_status
 		if (tempRegData & (1 << pin))
-			lastOpStatus = 1;
-			return lastOpStatus;
+			return 1;
 	}
 	else
 	{
 		// log_d("Pin %d not INPUT, REG_DIR_B: %d", pin, tempRegDir);
 	}
 
-	return lastOpStatus;
+	return 0;
 }
 
 bool SX1509::readPin(const uint8_t pin, bool *value)
@@ -778,7 +775,7 @@ uint16_t SX1509::readWord(uint8_t registerAddress)
 	_i2cPort->beginTransmission(deviceAddress);
 	_i2cPort->write(registerAddress);
 	_i2cPort->endTransmission();
-	_i2cPort->requestFrom(deviceAddress, (uint8_t)2);
+	lastOpStatus = _i2cPort->requestFrom(deviceAddress, (uint8_t)2) > 0;
 
 	msb = (_i2cPort->read() & 0x00FF) << 8;
 	lsb = (_i2cPort->read() & 0x00FF);
