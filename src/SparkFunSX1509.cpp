@@ -67,6 +67,10 @@ uint8_t SX1509::init(void)
 	uint16_t testRegisters = 0;
 	testRegisters = readWord(REG_INTERRUPT_MASK_A); // This should return 0xFF00
 
+	if (lastOpStatus == 0) {
+		return lastOpStatus;
+	}
+
 	lastOpStatus = 0;
 
 	// Then read a byte that should be 0x00
@@ -119,6 +123,10 @@ bool SX1509::pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 	if ((inOut == OUTPUT) || (inOut == ANALOG_OUTPUT))
 	{
 		uint16_t tempRegData = readWord(REG_DATA_B);
+		if (lastOpStatus == 0) {
+			return lastOpStatus;
+		}		
+
 		if (initialLevel == LOW)
 		{
 			tempRegData &= ~(1 << pin);
@@ -132,6 +140,10 @@ bool SX1509::pinDir(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 	}
 
 	uint16_t tempRegDir = readWord(REG_DIR_B);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 	if (modeBit)
 		tempRegDir |= (1 << pin);
 	else
@@ -161,10 +173,18 @@ bool SX1509::writePin(uint8_t pin, uint8_t highLow)
 {
 
 	uint16_t tempRegDir = readWord(REG_DIR_B);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 
 	if ((0xFFFF ^ tempRegDir) & (1 << pin)) // If the pin is an output, write high/low
 	{
 		uint16_t tempRegData = readWord(REG_DATA_B);
+		if (lastOpStatus == 0) {
+			return lastOpStatus;
+		}		
+		
 		if (highLow)
 			tempRegData |= (1 << pin);
 		else
@@ -175,7 +195,14 @@ bool SX1509::writePin(uint8_t pin, uint8_t highLow)
 	else // Otherwise the pin is an input, pull-up/down
 	{
 		uint16_t tempPullUp = readWord(REG_PULL_UP_B);
+		if (lastOpStatus == 0) {
+			return lastOpStatus;
+		}		
+		
 		uint16_t tempPullDown = readWord(REG_PULL_DOWN_B);
+		if (lastOpStatus == 0) {
+			return lastOpStatus;
+		}		
 
 		if (highLow) // if HIGH, do pull-up, disable pull-down
 		{
@@ -202,7 +229,10 @@ bool SX1509::digitalWrite(uint8_t pin, uint8_t highLow)
 uint8_t SX1509::readPin(uint8_t pin)
 {
 	uint16_t tempRegDir = readWord(REG_DIR_B);
-
+	if (lastOpStatus == 0) {
+			return 0;
+	}		
+		
 	if (tempRegDir & (1 << pin)) // If the pin is an input
 	{
 		uint16_t tempRegData = readWord(REG_DATA_B); // this will set last_op_status
@@ -222,6 +252,10 @@ bool SX1509::readPin(const uint8_t pin, bool *value)
 	uint16_t tempRegDir;
 	if (readWord(REG_DIR_B, &tempRegDir))
 	{
+		if (lastOpStatus == 0) {
+			return lastOpStatus;
+		}		
+		
 		if (tempRegDir & (1 << pin))
 		{ // If the pin is an input
 			uint16_t tempRegData;
@@ -262,24 +296,40 @@ bool SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false
 	// Writing a 1 to the pin bit will disable that pins input buffer
 	tempWord = readWord(REG_INPUT_DISABLE_B);
 	tempWord |= (1 << pin);
-	lastOpStatus = lastOpStatus = writeWord(REG_INPUT_DISABLE_B, tempWord);
+	lastOpStatus = writeWord(REG_INPUT_DISABLE_B, tempWord);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 
 	// Disable pull-up
 	// Writing a 0 to the pin bit will disable that pull-up resistor
 	tempWord = readWord(REG_PULL_UP_B);
 	tempWord &= ~(1 << pin);
 	lastOpStatus = writeWord(REG_PULL_UP_B, tempWord);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 
 	// Set direction to output (REG_DIR_B)
 	tempWord = readWord(REG_DIR_B);
 	tempWord &= ~(1 << pin); // 0=output
 	lastOpStatus = writeWord(REG_DIR_B, tempWord);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 
 	// Enable oscillator (REG_CLOCK)
 	tempByte = readByte(REG_CLOCK);
 	tempByte |= (1 << 6);  // Internal 2MHz oscillator part 1 (set bit 6)
 	tempByte &= ~(1 << 5); // Internal 2MHz oscillator part 2 (clear bit 5)
 	writeByte(REG_CLOCK, tempByte);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 
 	// Configure LED driver clock and mode (REG_MISC)
 	tempByte = readByte(REG_MISC);
@@ -308,14 +358,26 @@ bool SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false
 	tempByte |= freq;
 
 	writeByte(REG_MISC, tempByte);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 
 	// Enable LED driver operation (REG_LED_DRIVER_ENABLE)
 	tempWord = readWord(REG_LED_DRIVER_ENABLE_B);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 	tempWord |= (1 << pin);
 	lastOpStatus = writeWord(REG_LED_DRIVER_ENABLE_B, tempWord);
 
 	// Set REG_DATA bit low ~ LED driver started
 	tempWord = readWord(REG_DATA_B);
+	if (lastOpStatus == 0) {
+			return lastOpStatus;
+	}		
+		
 	tempWord &= ~(1 << pin);
 	lastOpStatus = writeWord(REG_DATA_B, tempWord);
 	return lastOpStatus;
@@ -753,7 +815,8 @@ uint8_t SX1509::readByte(uint8_t registerAddress)
 	_i2cPort->beginTransmission(deviceAddress);
 	_i2cPort->write(registerAddress);
 	_i2cPort->endTransmission();
-	_i2cPort->requestFrom(deviceAddress, (uint8_t)1);
+	uint8_t endResult = _i2cPort->endTransmission();
+	lastOpStatus = (endResult == I2C_ERROR_OK) && (_i2cPort->requestFrom(deviceAddress, (uint8_t)1) == 1);
 
 	readValue = _i2cPort->read();
 
@@ -775,7 +838,8 @@ uint16_t SX1509::readWord(uint8_t registerAddress)
 	_i2cPort->beginTransmission(deviceAddress);
 	_i2cPort->write(registerAddress);
 	_i2cPort->endTransmission();
-	lastOpStatus = _i2cPort->requestFrom(deviceAddress, (uint8_t)2) > 0;
+	uint8_t endResult = _i2cPort->endTransmission();
+	lastOpStatus = (endResult == I2C_ERROR_OK) && (_i2cPort->requestFrom(deviceAddress, (uint8_t)2) == 2);
 
 	msb = (_i2cPort->read() & 0x00FF) << 8;
 	lsb = (_i2cPort->read() & 0x00FF);
@@ -818,16 +882,16 @@ bool SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t *destination, uint8
 	_i2cPort->beginTransmission(deviceAddress);
 	_i2cPort->write(firstRegisterAddress);
 	uint8_t endResult = _i2cPort->endTransmission();
-	bool result = (endResult == I2C_ERROR_OK) && (_i2cPort->requestFrom(deviceAddress, length) == length);
-
-	if (result)
+	lastOpStatus = (endResult == I2C_ERROR_OK) && (_i2cPort->requestFrom(deviceAddress, length) == length);
+	
+	if (lastOpStatus)
 	{
 		for (uint8_t i = 0; i < length; i++)
 		{
 			destination[i] = _i2cPort->read();
 		}
 	}
-	return result;
+	return lastOpStatus;
 }
 
 // writeByte(uint8_t registerAddress, uint8_t writeValue)
@@ -838,9 +902,11 @@ bool SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t *destination, uint8
 bool SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 {
 	_i2cPort->beginTransmission(deviceAddress);
-	bool result = _i2cPort->write(registerAddress) && _i2cPort->write(writeValue);
+	lastOpStatus = _i2cPort->write(registerAddress) && _i2cPort->write(writeValue);
 	uint8_t endResult = _i2cPort->endTransmission();
-	return result && (endResult == I2C_ERROR_OK);
+	lastOpStatus = lastOpStatus && (endResult == I2C_ERROR_OK);
+
+	return lastOpStatus;
 }
 
 // lastOpStatus = writeWord(uint8_t registerAddress, uint16_t writeValue)
